@@ -1,0 +1,5 @@
+* Extra
+
+This is a collection of single functions that extend Emacs. In some cases they replace a
+larger dependency. For example, ~extra-surround~ replaces [[https://github.com/emacs-evil/evil-surround][evil-surround]]. It has much less
+functionality, but it offers all I need.
