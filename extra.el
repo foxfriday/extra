@@ -178,6 +178,36 @@
 		            (shell-quote-argument "{}") " "
 		            (shell-quote-argument ";")))))
 
+;;; Dired + Git
+(defun extra-dired-git (flags dir bfr)
+  "Show a `dired` buffer with files in DIR using git FLAGS named BFR."
+  (switch-to-buffer (get-buffer-create bfr))
+  (cd dir)
+  (shell-command (concat "git " flags " | xargs ls -lah") (current-buffer))
+  (dired-mode dir)
+  (set (make-local-variable 'dired-subdir-alist)
+       (list (cons default-directory (point-min-marker)))))
+
+;;;###autoload
+(defun extra-dired-untracked (dir)
+  "Show a `dired` buffer with untracked files in DIR."
+  (interactive "DUntracked in directory: ")
+  (extra-dired-git "ls-files --others" dir "*untracked*"))
+
+;;;###autoload
+(defun extra-dired-tracked (dir)
+  "Show a `dired` buffer with tracked files in DIR."
+  (interactive "DUntracked in directory: ")
+  (extra-dired-git "ls-files" dir "*tracked*"))
+
+;;;###autoload
+(defun extra-dired-conf ()
+  "Show a `dired` buffer with tracked configuration files."
+  (interactive)
+  (extra-dired-git
+   "--git-dir=${HOME}/.dots.git/ --work-tree=${HOME} ls-files" "~"
+   "*tracked*"))
+
 ;;;###autoload
 (defun extra-print-to-pdf ()
   "Print current buffer to PDF."
