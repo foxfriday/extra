@@ -4,7 +4,7 @@
 
 ;; Author: M. Rincón
 ;; Keywords: functions
-;; Version: 0.0.1
+;; Version: 0.0.2
 
 ;; This program is free software; you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
@@ -246,6 +246,28 @@ for the line number band."
       (find-alternate-file (concat "/sudo:root@localhost:" buffer-file-name))
     (find-file (concat "/sudo:root@localhost:"
                        (expand-file-name (read-file-name "File: "))))))
+
+;;;###autoload
+(defun extra-format-buffer (formatter)
+  "Format the current buffer using the FORMATTER."
+  (interactive)
+  (let* ((input-buffer (buffer-name))
+         (in-point (point))
+         (proj (locate-dominating-file default-directory ".git"))
+         (default-directory (if proj proj default-directory))
+         (temp-file (make-temp-file "format"))
+         (log-buffer (get-buffer-create "*format-log*"))
+         (out-buffer (get-buffer-create " *format-output*" t))
+         (exit-code (call-process-region nil nil formatter nil (list out-buffer temp-file) nil "-")))
+    (with-current-buffer log-buffer
+      (insert-file-contents temp-file))
+    (unless (zerop exit-code)
+      (kill-buffer out-buffer)
+      (error "Formatting failed with error code %s" exit-code))
+    (with-current-buffer out-buffer
+      (copy-to-buffer input-buffer (point-min) (point-max)))
+    (kill-buffer out-buffer)
+    (goto-char (min in-point (point-max)))))
 
 (provide 'extra)
 ;;; extra.el ends here
