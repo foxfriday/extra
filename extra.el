@@ -4,7 +4,7 @@
 
 ;; Author: M. Rincón
 ;; Keywords: functions
-;; Version: 0.0.2
+;; Version: 0.0.3
 
 ;; This program is free software; you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
@@ -145,7 +145,8 @@
 (defun extra-getlast-regexp ()
   "Find the last used regular expression."
   (require 'isearch)
-  (cond ((functionp isearch-regexp-function) (funcall isearch-regexp-function isearch-string))
+  (cond ((functionp isearch-regexp-function) (funcall isearch-regexp-function
+                                                      isearch-string))
          (isearch-regexp-function (word-search-regexp isearch-string))
          (isearch-regexp isearch-string)
          (isearch-string (regexp-quote isearch-string))
@@ -205,7 +206,8 @@
   "Show a `dired` buffer with tracked configuration files."
   (interactive)
   (extra-dired-git
-   "--git-dir=${HOME}/.dots.git/ --work-tree=${HOME} ls-files" "~"
+   "--git-dir=${HOME}/.conf.git/ --work-tree=${HOME} ls-files"
+   "~"
    "*tracked*"))
 
 ;;;###autoload
@@ -236,6 +238,8 @@ for the line number band."
          (new (cond ((not (cdr now)) frame)
                     ((= frame (car now) (cdr now)) 0)
                     (t frame))))
+    (setq-local left-margin-width frame)
+    (setq-local right-margin-width frame)
     (set-window-margins window new new)))
 
 ;;;###autoload
