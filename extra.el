@@ -4,7 +4,7 @@
 
 ;; Author: M. Rincón
 ;; Keywords: functions
-;; Version: 0.0.3
+;; Version: 0.0.4
 
 ;; This program is free software; you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
@@ -38,6 +38,9 @@
 
 (defvar extra-search-cmnd "rg --color=auto -i -nH --no-heading --null"
   "Default command for grep searches.")
+
+(defvar extra-search-exclude (list ".git" ".venv" ".mypy_cache" "__pycache__")
+  "Default list of excluded directories.")
 
 ;;;###autoload
 (defun extra-surround (&optional surr)
@@ -163,7 +166,11 @@
          (regexp (read-string ask nil nil last))
          (dir (read-directory-name "Directory: " ddir))
          (default-directory dir)
-         (cmnd (format "find . -type f -exec grep --color=auto -nH --null -e %s \\{\\} +" regexp)))
+         (excld (mapconcat (lambda (d) (format " -not -path \"*/%s/*\"" d))
+                           extra-search-exclude))
+         (cmnd
+          (format "find . -type f %s -exec grep --color=auto -nH --null -e %s \\{\\} +"
+                  excld regexp)))
     (grep-find cmnd)))
 
 ;;;###autoload
@@ -173,8 +180,10 @@
   (let* ((last (extra-getlast-regexp))
          (ask (if last (concat "Regex (Default: " last "):") "Search:"))
          (regexp (read-string ask nil nil last))
-         (dir (read-directory-name "Directory:")))
-    (find-dired dir (concat "-type f -not -path '*/.git*' -exec rg -q -e "
+         (dir (read-directory-name "Directory:"))
+         (excld (mapconcat (lambda (d) (format " -not -path \"*/%s/*\"" d))
+                           extra-search-exclude)))
+    (find-dired dir (concat "-type f " excld " -exec rg -q -e "
 		            (shell-quote-argument regexp) " "
 		            (shell-quote-argument "{}") " "
 		            (shell-quote-argument ";")))))
