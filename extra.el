@@ -4,7 +4,7 @@
 
 ;; Author: M. Rincón
 ;; Keywords: functions
-;; Version: 0.0.4
+;; Version: 0.0.5
 
 ;; This program is free software; you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
@@ -41,6 +41,9 @@
 
 (defvar extra-search-exclude (list ".git" ".venv" ".mypy_cache" "__pycache__")
   "Default list of excluded directories.")
+
+(defvar extra-alert-buffer "*Extra Alert*"
+  "Default name for the alert buffer.")
 
 ;;;###autoload
 (defun extra-surround (&optional surr)
@@ -240,16 +243,19 @@ To remove the fringe band when running in a GUI environment, set
 a fringe face that matches the background. The same can be done
 for the line number band."
   (interactive)
-  (let* ((window (car (get-buffer-window-list (current-buffer) nil t)))
+  (let* ((fcolor (face-attribute 'default :background))
+         (window (car (get-buffer-window-list (current-buffer) nil t)))
          (width (window-total-width window t))
          (frame (max (round (/ (- width (+ fill-column 2)) 2)) 0))
          (now (window-margins window))
          (new (cond ((not (cdr now)) frame)
                     ((= frame (car now) (cdr now)) 0)
                     (t frame))))
-    (setq-local left-margin-width frame)
-    (setq-local right-margin-width frame)
-    (set-window-margins window new new)))
+    (setq-local left-margin-width new)
+    (setq-local right-margin-width new)
+    (set-window-margins window new new)
+    (set-face-attribute 'fringe nil :background fcolor)
+    (set-face-attribute 'line-number nil :background fcolor)))
 
 ;;;###autoload
 (defun extra-sudoedit (&optional arg)
@@ -281,6 +287,61 @@ for the line number band."
       (copy-to-buffer input-buffer (point-min) (point-max)))
     (kill-buffer out-buffer)
     (goto-char (min in-point (point-max)))))
+
+;;; Alert
+;; This code is mostly based on `appt.el`
+(defun extra--select-lowest-window ()
+  "Select the lowest window on the frame."
+  (let ((lowest-window (selected-window))
+        (bottom-edge (nth 3 (window-edges)))
+        next-bottom-edge)
+    (walk-windows (lambda (w)
+                    (when (< bottom-edge (setq next-bottom-edge
+                                               (nth 3 (window-edges w))))
+                      (setq bottom-edge next-bottom-edge
+                            lowest-window w))) 'nomini)
+    (select-window lowest-window)))
+
+;;;###autoload
+(defun extra-alert (msg)
+  "Create a window with the MSG."
+  (let ((this-window (selected-window))
+        (alert-window (get-buffer-create extra-alert-buffer)))
+    (when (minibufferp)
+      (other-window 1)
+      (and (minibufferp) (display-multi-frame-p) (other-frame 1)))
+    (if (cdr (assq 'unsplittable (frame-parameters)))
+        ;; In an unsplittable frame, use something somewhere else.
+        (progn
+	  (set-buffer alert-window)
+	  (display-buffer alert-window))
+      (unless (or (special-display-p (buffer-name alert-window))
+                  (same-window-p (buffer-name alert-window)))
+        ;; By default, split the bottom window and use the lower part.
+        (extra--select-lowest-window)
+        ;; Split the window, unless it's too small to do so.
+        (when (>= (window-height) (* 2 window-min-height))
+          (select-window (split-window))))
+      (switch-to-buffer alert-window))
+    (setq buffer-read-only nil
+          buffer-undo-list t)
+    (erase-buffer)
+    (insert "\n" msg)
+    (center-paragraph)
+    (shrink-window-if-larger-than-buffer (get-buffer-window alert-window t))
+    (set-buffer-modified-p nil)
+    (setq buffer-read-only t)
+    (raise-frame)
+    (select-window this-window)))
+
+;;;###autoload
+(defun extra-kill-alert ()
+  "Close alert buffer."
+  (interactive)
+  (set-buffer extra-alert-buffer)
+  (kill-this-buffer)
+  (if (not (one-window-p))
+        (delete-window)))
 
 (provide 'extra)
 ;;; extra.el ends here
