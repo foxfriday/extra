@@ -4,7 +4,7 @@
 
 ;; Author: M. Rincón
 ;; Keywords: functions
-;; Version: 0.0.5
+;; Version: 0.0.6
 
 ;; This program is free software; you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
@@ -236,28 +236,6 @@
     (message (concat "Saved " out-pdf))))
 
 ;;;###autoload
-(defun extra-narrow ()
-  "Try to narrow the frame to `fill-column` or revert a prior action.
-
-To remove the fringe band when running in a GUI environment, set
-a fringe face that matches the background. The same can be done
-for the line number band."
-  (interactive)
-  (let* ((fcolor (face-attribute 'default :background))
-         (window (car (get-buffer-window-list (current-buffer) nil t)))
-         (width (window-total-width window t))
-         (frame (max (round (/ (- width (+ fill-column 2)) 2)) 0))
-         (now (window-margins window))
-         (new (cond ((not (cdr now)) frame)
-                    ((= frame (car now) (cdr now)) 0)
-                    (t frame))))
-    (setq-local left-margin-width new)
-    (setq-local right-margin-width new)
-    (set-window-margins window new new)
-    (set-face-attribute 'fringe nil :background fcolor)
-    (set-face-attribute 'line-number nil :background fcolor)))
-
-;;;###autoload
 (defun extra-sudoedit (&optional arg)
   "Edit buffer as root, with ARG reopen current buffer."
   (interactive "p")
@@ -342,6 +320,37 @@ for the line number band."
   (kill-this-buffer)
   (if (not (one-window-p))
         (delete-window)))
+
+(defun extra--narrow (&optional pad)
+  "Try to narrow frame to `fill-column` or by PAD on both sides.
+
+To remove the fringe band when running in a GUI environment, set
+a fringe face that matches the background. The same can be done
+for the line number band."
+  (let* ((window-configuration-change-hook nil)
+         (fcolor (face-attribute 'default :background))
+         (window (car (get-buffer-window-list (current-buffer) nil t)))
+         (width (window-total-width window t))
+         (new (if pad pad (max (round (/ (- width (+ fill-column 3)) 2)) 0))))
+    (setq-local left-margin-width new)
+    (setq-local right-margin-width new)
+    (set-window-margins window new new)
+    (set-face-attribute 'fringe nil :background fcolor)
+    (set-face-attribute 'line-number nil :background fcolor)))
+
+;;;###autoload
+(define-minor-mode extra-narrow-mode
+  "Try to narrow the frame to `fill-column` or revert a prior action.
+
+To remove the fringe band when running in a GUI environment, set
+a fringe face that matches the background. The same can be done
+for the line number band."
+  :init-value nil
+  :lighter " extra-narrow-mode"
+  (if extra-narrow-mode
+      (add-hook 'window-configuration-change-hook 'extra--narrow 100 t)
+    (progn (remove-hook 'window-configuration-change-hook 'extra--narrow t)
+           (extra--narrow 0))))
 
 (provide 'extra)
 ;;; extra.el ends here
