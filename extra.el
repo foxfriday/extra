@@ -4,7 +4,7 @@
 
 ;; Author: M. Rincón
 ;; Keywords: functions
-;; Version: 0.0.7
+;; Version: 0.0.8
 
 ;; This program is free software; you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
@@ -26,13 +26,10 @@
 ;; when I only intend to use one function.
 
 ;;; Code:
-(defvar extra-open-out-extensions (list "pdf" "epub" "xlsx" "docx")
+(defvar extra-open-out-extensions (list "pdf" "epub" "xlsx" "docx" "pptx")
   "List of extensions to open externally.")
 
-(defvar extra-open-out-cmnd (if (eq system-type 'darwin) "open"
-                              (if (eq system-type 'gnu/linux)
-                                  (if (getenv "WSLENV") "explorer.exe"
-                                    "xdg-open")))
+(defvar extra-open-out-cmnd (if (eq system-type 'darwin) "open" "xdg-open")
   "Command used to open a file externally.")
 
 (defvar extra-surround-characters
