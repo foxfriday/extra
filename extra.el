@@ -4,7 +4,7 @@
 
 ;; Author: M. Rincón
 ;; Keywords: functions
-;; Version: 0.0.8
+;; Version: 0.1.0
 
 ;; This program is free software; you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
@@ -44,6 +44,9 @@
 
 (defvar extra-alert-buffer "*Extra Alert*"
   "Default name for the alert buffer.")
+
+(defvar extra-narrow-padding 10
+  "Additional padding added to `fill-column` with `extra-narrow` mode.")
 
 ;;;###autoload
 (defun extra-surround (&optional surr)
@@ -331,7 +334,9 @@ for the line number band."
          (fcolor (face-attribute 'default :background))
          (window (car (get-buffer-window-list (current-buffer) nil t)))
          (width (window-total-width window t))
-         (new (if pad pad (max (round (/ (- width (+ fill-column 3)) 2)) 0))))
+         (new (if pad
+                  pad
+                (max (round (/ (- width (+ fill-column extra-narrow-padding)) 2)) 0))))
     (setq-local left-margin-width new)
     (setq-local right-margin-width new)
     (set-window-margins window new new)
@@ -348,6 +353,7 @@ for the line number band."
   :init-value nil
   :lighter " extra-narrow-mode"
   (if extra-narrow-mode
+      (extra--narrow)
       (add-hook 'window-configuration-change-hook 'extra--narrow 100 t)
     (progn (remove-hook 'window-configuration-change-hook 'extra--narrow t)
            (extra--narrow 0))))
