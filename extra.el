@@ -1,10 +1,10 @@
 ;;; extra.el --- A collection of unrelated functions         -*- lexical-binding: t; -*-
 
-;; Copyright (C) 2023 M. Rincón
+;; Copyright (C) 2024 M. Rincón
 
 ;; Author: M. Rincón
 ;; Keywords: functions
-;; Version: 0.1.0
+;; Version: 0.1.2
 
 ;; This program is free software; you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
@@ -33,14 +33,23 @@
   "Command used to open a file externally.")
 
 (defvar extra-surround-characters
-  '(("<" . ">") ("(" . ")") ("{" . "}") ("[" . "]") ("\"" . "\"") ("~" . "~") ("=" . "="))
+  '(("<" . ">") ("(" . ")") ("{" . "}") ("[" . "]") ("\"" . "\"") ("~" . "~")
+    ("=" . "=") ("*" . "*") ("_" . "_") ("'" . "'") (":" . ":"))
   "Default surround character.")
-
-(defvar extra-search-cmnd "rg --color=auto -i -nH --no-heading --null"
-  "Default command for grep searches.")
 
 (defvar extra-search-exclude (list ".git" ".venv" ".mypy_cache" "__pycache__")
   "Default list of excluded directories.")
+
+(defvar extra-format-python "black -"
+  "Command to format python code.")
+
+(defvar extra-format-bash "shfmt -ln bash -i 4 -ci"
+  "Command to format bash scripts.")
+
+(defvar extra-format-mode-cmd
+  (list (cons 'python-ts-mode extra-format-python)
+        (cons 'bash-ts-mode extra-format-bash))
+  "Format command associated with a mode.")
 
 (defvar extra-alert-buffer "*Extra Alert*"
   "Default name for the alert buffer.")
@@ -112,81 +121,43 @@
         (t (other-window 1))))
 
 ;;;###autoload
-(defun extra-close-other-buffer (&optional direction)
-  "Close buffer at DIRECTION up, down, left, or right."
+(defun extra-close-other-buffer (&optional direction kill)
+  "Close or KILL buffer at DIRECTION up (k), down (j), left (h), or right (l)."
   (interactive)
   (unless (one-window-p)
     (extra-switch-window direction)
     (kill-this-buffer)
     (if (not (one-window-p))
-        (other-window 1))))
-
-;;;###autoload
-(defun extra-kill-other-buffer (&optional direction)
-  "Kill window and its buffer at DIRECTION up, down, left, or right."
-  (interactive)
-  (unless (one-window-p)
-    (extra-switch-window direction)
-    (kill-this-buffer)
-    (if (not (one-window-p))
-        (delete-window))))
+        (if kill (delete-window) (other-window 1)))))
 
 ;;;###autoload
 (defun extra-kill-buffers-in-mode (mode)
   "Closes all open buffers with MODE."
-  (interactive)
   (mapc (lambda (buffer)
           (when (eq mode (buffer-local-value 'major-mode buffer))
             (kill-buffer buffer)))
         (buffer-list)))
 
 ;;;###autoload
-(defun extra-open-in(dir regex)
-  "Open a file in DIR matching the REGEX."
-  (interactive)
-  (let* ((files (list)))
-    (dolist (f (directory-files-recursively dir regex))
-      (push (cons (file-name-nondirectory f) f) files))
-    (if files
-        (find-file (cdr (assoc (completing-read "Open File" files) files)))
-      (warn "No files found."))))
-
-(defun extra-getlast-regexp ()
-  "Find the last used regular expression."
-  (require 'isearch)
-  (cond ((functionp isearch-regexp-function) (funcall isearch-regexp-function
-                                                      isearch-string))
-         (isearch-regexp-function (word-search-regexp isearch-string))
-         (isearch-regexp isearch-string)
-         (isearch-string (regexp-quote isearch-string))
-         (t nil)))
-
-;;;###autoload
-(defun extra-search-dir (&optional dir last)
-  "Show matches in DIR, by default use LAST search."
+(defun extra-search-dir (&optional dir rgx)
+  "Show matches in DIR, by default use RGX search."
   (interactive)
   (require 'grep)
-  (let* ((last (if last last (extra-getlast-regexp)))
-         (ddir (if dir dir (locate-dominating-file default-directory ".git")))
-         (ask (if last (concat "Regex (Default: " last "):") "Search:"))
-         (regexp (read-string ask nil nil last))
-         (dir (read-directory-name "Directory: " ddir))
-         (default-directory dir)
+  (let* ((regexp (if rgx rgx (read-string "Regex:" nil nil)))
+         (default-directory (if dir dir (read-directory-name "Directory:")))
          (excld (mapconcat (lambda (d) (format " -not -path \"*/%s/*\"" d))
                            extra-search-exclude))
-         (cmnd
-          (format "find . -type f %s -exec grep --color=auto -nH --null -e %s \\{\\} +"
-                  excld regexp)))
+         (cmnd (format "find . -type f %s -exec grep --color=auto -nH --null -e %s \\{\\} +"
+                       excld
+                       regexp)))
     (grep-find cmnd)))
 
 ;;;###autoload
-(defun extra-search-to-dired ()
-  "Search a string and start Dired on output."
+(defun extra-search-to-dired (&optional dir rgx)
+  "Search RGX in DIR and show matches in Dired."
   (interactive)
-  (let* ((last (extra-getlast-regexp))
-         (ask (if last (concat "Regex (Default: " last "):") "Search:"))
-         (regexp (read-string ask nil nil last))
-         (dir (read-directory-name "Directory:"))
+  (let* ((regexp (if rgx rgx (read-string "Regex:" nil nil)))
+         (dir (if dir dir (read-directory-name "Directory:")))
          (excld (mapconcat (lambda (d) (format " -not -path \"*/%s/*\"" d))
                            extra-search-exclude)))
     (find-dired dir (concat "-type f " excld " -exec rg -q -e "
@@ -217,15 +188,6 @@
   (extra-dired-git "ls-files" dir "*tracked*"))
 
 ;;;###autoload
-(defun extra-dired-conf ()
-  "Show a `dired` buffer with tracked configuration files."
-  (interactive)
-  (extra-dired-git
-   "--git-dir=${HOME}/.conf.git/ --work-tree=${HOME} ls-files"
-   "~"
-   "*tracked*"))
-
-;;;###autoload
 (defun extra-print-to-pdf ()
   "Print current buffer to PDF."
   (interactive)
@@ -248,27 +210,35 @@
                        (expand-file-name (read-file-name "File: "))))))
 
 ;;;###autoload
-(defun extra-format-buffer (formatter)
-  "Format the current buffer using the FORMATTER."
+(defun extra-format-buffer (&optional formatter)
+  "Format the current buffer using the FORMATTER command."
   (interactive)
-  (let* ((input-buffer (buffer-name))
+  (let* ((fmt (if formatter
+                  formatter
+                (cdr (assoc major-mode extra-format-mode-cmd))))
+         (input-buffer (buffer-name))
          (in-point (point))
          (proj (locate-dominating-file default-directory ".git"))
          (default-directory (if proj proj default-directory))
-         (temp-file (make-temp-file "format"))
-         (log-buffer (get-buffer-create "*format-log*"))
-         (out-buffer (get-buffer-create " *format-output*" t))
-         (exit-code (call-process-region nil nil formatter nil (list out-buffer temp-file) nil "-")))
-    (with-current-buffer log-buffer
-      (insert-file-contents temp-file))
+         (log-buffer (get-buffer-create "*extra-format-log*"))
+         (out-buffer (get-buffer-create "*extra-format-tmp*" t))
+         (exit-code))
+    (if fmt
+        (setq exit-code (shell-command-on-region (point-min)
+                                                 (point-max)
+                                                 fmt
+                                                 out-buffer
+                                                 nil
+                                                 log-buffer))
+      (error "There's no default format command for the current mode"))
     (unless (zerop exit-code)
       (kill-buffer out-buffer)
       (error "Formatting failed with error code %s" exit-code))
     (with-current-buffer out-buffer
       (copy-to-buffer input-buffer (point-min) (point-max)))
     (kill-buffer out-buffer)
+    (if (= (buffer-size log-buffer) 0) (kill-buffer log-buffer))
     (goto-char (min in-point (point-max)))))
-
 ;;; Alert
 ;; This code is mostly based on `appt.el`
 (defun extra--select-lowest-window ()
