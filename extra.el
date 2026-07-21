@@ -4,7 +4,7 @@
 
 ;; Author: M. Rincón
 ;; Keywords: functions
-;; Version: 0.1.2
+;; Version: 0.1.3
 
 ;; This program is free software; you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
@@ -37,25 +37,16 @@
     ("=" . "=") ("*" . "*") ("_" . "_") ("'" . "'") (":" . ":"))
   "Default surround character.")
 
-(defvar extra-search-exclude (list ".git" ".venv" ".mypy_cache" "__pycache__")
+(defvar extra-search-exclude (list ".git" ".venv" ".mypy_cache" "__pycache__" ".pytest_cache")
   "Default list of excluded directories.")
 
-(defvar extra-format-python "black -"
-  "Command to format python code.")
-
-(defvar extra-format-bash "shfmt -ln bash -i 4 -ci"
-  "Command to format bash scripts.")
-
 (defvar extra-format-mode-cmd
-  (list (cons 'python-ts-mode extra-format-python)
-        (cons 'bash-ts-mode extra-format-bash))
+  (list (cons 'python-ts-mode "ruff format -")
+        (cons 'bash-ts-mode "shfmt -ln bash -i 4 -ci"))
   "Format command associated with a mode.")
 
-(defvar extra-alert-buffer "*Extra Alert*"
-  "Default name for the alert buffer.")
-
 (defvar extra-narrow-padding 10
-  "Additional padding added to `fill-column` with `extra-narrow` mode.")
+  "Additional padding added to `fill-column' with `extra-narrow-mode'.")
 
 ;;;###autoload
 (defun extra-surround (&optional surr)
@@ -68,18 +59,20 @@
          (bds (if rgn nil (bounds-of-thing-at-point 'symbol)))
          (start (if rgn (region-beginning) (car bds)))
          (end (if rgn (region-end) (cdr bds))))
-    (goto-char start)
-    (insert surr)
-    (goto-char end)
-    (forward-char 1)
-    (insert-before-markers right)))
+    (unless start (user-error "No region or symbol at point"))
+    (let ((end-marker (copy-marker end)))
+      (goto-char start)
+      (insert surr)
+      (goto-char end-marker)
+      (insert right))))
 
 ;;;###autoload
 (defun extra-open-out (file &optional cmnd)
   "Execute command CMND on FILE."
   (let* ((ext (file-name-extension file))
          (app (cond (cmnd cmnd)
-                    ((member ext extra-open-out-extensions) extra-open-out-cmnd)
+                    ((and ext (member (downcase ext) extra-open-out-extensions))
+                     extra-open-out-cmnd)
                     (t nil)))
          (log-buffer (get-buffer-create "*Messages*")))
     (if app (make-process :name "ext-open"
@@ -96,17 +89,6 @@
   (let ((fill-column (point-max))
         (emacs-lisp-docstring-fill-column t))
     (fill-paragraph nil region)))
-
-;;;###autoload
-(defun extra-toggle-line-numbering ()
-  "Toggle line numbering between absolute and relative."
-  (interactive)
-  (cond ((eq display-line-numbers 'relative)
-         (setq display-line-numbers nil))
-        (display-line-numbers
-         (setq display-line-numbers 'relative))
-        (t
-         (setq display-line-numbers t))))
 
 (defun extra-switch-window (&optional direction)
   "Switch DIRECTION up, down, left, right or other."
@@ -126,7 +108,7 @@
   (interactive)
   (unless (one-window-p)
     (extra-switch-window direction)
-    (kill-this-buffer)
+    (kill-buffer)
     (if (not (one-window-p))
         (if kill (delete-window) (other-window 1)))))
 
@@ -146,10 +128,10 @@
   (let* ((regexp (if rgx rgx (read-string "Regex:" nil nil)))
          (default-directory (if dir dir (read-directory-name "Directory:")))
          (excld (mapconcat (lambda (d) (format " -not -path \"*/%s/*\"" d))
-                           extra-search-exclude))
+                           extra-search-exclude ""))
          (cmnd (format "find . -type f %s -exec grep --color=auto -nH --null -e %s \\{\\} +"
                        excld
-                       regexp)))
+                       (shell-quote-argument regexp))))
     (grep-find cmnd)))
 
 ;;;###autoload
@@ -159,7 +141,7 @@
   (let* ((regexp (if rgx rgx (read-string "Regex:" nil nil)))
          (dir (if dir dir (read-directory-name "Directory:")))
          (excld (mapconcat (lambda (d) (format " -not -path \"*/%s/*\"" d))
-                           extra-search-exclude)))
+                           extra-search-exclude "")))
     (find-dired dir (concat "-type f " excld " -exec rg -q -e "
 		            (shell-quote-argument regexp) " "
 		            (shell-quote-argument "{}") " "
@@ -170,10 +152,10 @@
   "Show a `dired` buffer with files in DIR using git FLAGS named BFR."
   (switch-to-buffer (get-buffer-create bfr))
   (cd dir)
-  (shell-command (concat "git " flags " | xargs ls -lah") (current-buffer))
+  (shell-command (concat "git " flags " -z | xargs -0 -r ls -lah") (current-buffer))
   (dired-mode dir)
-  (set (make-local-variable 'dired-subdir-alist)
-       (list (cons default-directory (point-min-marker)))))
+  (setq-local dired-subdir-alist
+              (list (cons default-directory (point-min-marker)))))
 
 ;;;###autoload
 (defun extra-dired-untracked (dir)
@@ -184,7 +166,7 @@
 ;;;###autoload
 (defun extra-dired-tracked (dir)
   "Show a `dired` buffer with tracked files in DIR."
-  (interactive "DUntracked in directory: ")
+  (interactive "DTracked in directory: ")
   (extra-dired-git "ls-files" dir "*tracked*"))
 
 ;;;###autoload
@@ -196,9 +178,10 @@
          (temp-ps (expand-file-name (concat "~/Downloads/" fname ".ps")))
          (out-pdf (expand-file-name (concat "~/Downloads/" fname ".pdf"))))
     (ps-print-buffer-with-faces temp-ps)
-    (shell-command (concat "ps2pdf " temp-ps " " out-pdf))
+    (shell-command (concat "ps2pdf " (shell-quote-argument temp-ps)
+                           " " (shell-quote-argument out-pdf)))
     (delete-file temp-ps)
-    (message (concat "Saved " out-pdf))))
+    (message "Saved %s" out-pdf)))
 
 ;;;###autoload
 (defun extra-sudoedit (&optional arg)
@@ -239,63 +222,10 @@
     (kill-buffer out-buffer)
     (if (= (buffer-size log-buffer) 0) (kill-buffer log-buffer))
     (goto-char (min in-point (point-max)))))
-;;; Alert
-;; This code is mostly based on `appt.el`
-(defun extra--select-lowest-window ()
-  "Select the lowest window on the frame."
-  (let ((lowest-window (selected-window))
-        (bottom-edge (nth 3 (window-edges)))
-        next-bottom-edge)
-    (walk-windows (lambda (w)
-                    (when (< bottom-edge (setq next-bottom-edge
-                                               (nth 3 (window-edges w))))
-                      (setq bottom-edge next-bottom-edge
-                            lowest-window w))) 'nomini)
-    (select-window lowest-window)))
 
-;;;###autoload
-(defun extra-alert (msg)
-  "Create a window with the MSG."
-  (let ((this-window (selected-window))
-        (alert-window (get-buffer-create extra-alert-buffer)))
-    (when (minibufferp)
-      (other-window 1)
-      (and (minibufferp) (display-multi-frame-p) (other-frame 1)))
-    (if (cdr (assq 'unsplittable (frame-parameters)))
-        ;; In an unsplittable frame, use something somewhere else.
-        (progn
-	  (set-buffer alert-window)
-	  (display-buffer alert-window))
-      (unless (or (special-display-p (buffer-name alert-window))
-                  (same-window-p (buffer-name alert-window)))
-        ;; By default, split the bottom window and use the lower part.
-        (extra--select-lowest-window)
-        ;; Split the window, unless it's too small to do so.
-        (when (>= (window-height) (* 2 window-min-height))
-          (select-window (split-window))))
-      (switch-to-buffer alert-window))
-    (setq buffer-read-only nil
-          buffer-undo-list t)
-    (erase-buffer)
-    (insert "\n" msg)
-    (center-paragraph)
-    (shrink-window-if-larger-than-buffer (get-buffer-window alert-window t))
-    (set-buffer-modified-p nil)
-    (setq buffer-read-only t)
-    (raise-frame)
-    (select-window this-window)))
-
-;;;###autoload
-(defun extra-kill-alert ()
-  "Close alert buffer."
-  (interactive)
-  (set-buffer extra-alert-buffer)
-  (kill-this-buffer)
-  (if (not (one-window-p))
-        (delete-window)))
-
+;;; Narrow mode
 (defun extra--narrow (&optional pad)
-  "Try to narrow frame to `fill-column` or by PAD on both sides.
+  "Try to narrow frame to `fill-column' or by PAD on both sides.
 
 To remove the fringe band when running in a GUI environment, set
 a fringe face that matches the background. The same can be done
@@ -315,18 +245,19 @@ for the line number band."
 
 ;;;###autoload
 (define-minor-mode extra-narrow-mode
-  "Try to narrow the frame to `fill-column` or revert a prior action.
+  "Try to narrow the frame to `fill-column' or revert a prior action.
 
 To remove the fringe band when running in a GUI environment, set
 a fringe face that matches the background. The same can be done
 for the line number band."
   :init-value nil
-  :lighter " extra-narrow-mode"
+  :lighter " Narrow"
   (if extra-narrow-mode
-      (extra--narrow)
-      (add-hook 'window-configuration-change-hook 'extra--narrow 100 t)
-    (progn (remove-hook 'window-configuration-change-hook 'extra--narrow t)
-           (extra--narrow 0))))
+      (progn
+        (extra--narrow)
+        (add-hook 'window-configuration-change-hook 'extra--narrow 100 t))
+    (remove-hook 'window-configuration-change-hook 'extra--narrow t)
+    (extra--narrow 0)))
 
 (provide 'extra)
 ;;; extra.el ends here
