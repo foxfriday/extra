@@ -4,7 +4,7 @@
 
 ;; Author: M. Rincón
 ;; Keywords: functions
-;; Version: 0.1.3
+;; Version: 0.1.4
 
 ;; This program is free software; you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
@@ -170,18 +170,49 @@
   (extra-dired-git "ls-files" dir "*tracked*"))
 
 ;;;###autoload
-(defun extra-print-to-pdf ()
-  "Print current buffer to PDF."
-  (interactive)
-  (let* ((bname (file-name-nondirectory (buffer-file-name)))
-         (fname (file-name-sans-extension bname))
-         (temp-ps (expand-file-name (concat "~/Downloads/" fname ".ps")))
-         (out-pdf (expand-file-name (concat "~/Downloads/" fname ".pdf"))))
-    (ps-print-buffer-with-faces temp-ps)
-    (shell-command (concat "ps2pdf " (shell-quote-argument temp-ps)
-                           " " (shell-quote-argument out-pdf)))
-    (delete-file temp-ps)
-    (message "Saved %s" out-pdf)))
+(defun extra-print-buffer (file &optional landscape open)
+  "Write the current buffer to a FILE and OPEN the file.
+
+If LANDSCAPE is not nil, print PDF and PS files in landscape mode.
+The file extension can be plain text (txt), PDF or Postscript (ps).
+If OPEN is not nil, open the file afterwards."
+  (interactive "FWrite buffer to file: \nP")
+  (if (or (not (file-writable-p file))
+	  (and (file-exists-p file)
+	       (if (called-interactively-p 'any)
+		   (not (y-or-n-p (format "Overwrite existing file %s? " file))))))
+      (error "Cannot write to file %s" file))
+  (save-excursion
+    (save-window-excursion
+      (let ((bs (copy-sequence (buffer-string)))
+            (bn (concat (buffer-name) "_print"))
+	    (extension (file-name-extension file))
+	    (default-directory (file-name-directory file))
+            (ps-print-header nil)
+            (ps-landscape-mode landscape))
+	(with-temp-buffer
+	  (rename-buffer bn t)
+	  (set-buffer-modified-p nil)
+	  (insert bs)
+	  (cond
+	   ((string= "ps" extension)
+	    (require 'ps-print)
+	    (ps-print-buffer-with-faces file)
+	    (message "Postscript written to %s" file))
+	   ((string= "pdf" extension)
+	    (require 'ps-print)
+	    (ps-print-buffer-with-faces
+	     (concat (file-name-sans-extension file) ".ps"))
+	    (call-process "ps2pdf" nil nil nil
+			  (expand-file-name
+			   (concat (file-name-sans-extension file) ".ps"))
+			  (expand-file-name file))
+	    (delete-file (concat (file-name-sans-extension file) ".ps"))
+	    (message "PDF written to %s" file))
+	   (t
+            (write-region nil nil file)
+            (message "Plain text written to %s" file)))))))
+  (when open (find-file file)))
 
 ;;;###autoload
 (defun extra-sudoedit (&optional arg)
